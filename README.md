@@ -20,7 +20,7 @@ Bu proje, Python backend ve HTML, CSS, JS kullanarak geliştirilmiş bir anlık 
   - **Python**
   - **Flask** (Web framework)
   - **Flask-SocketIO** (Gerçek zamanlı bağlantılar için)
-  - **eventlet** (Asenkron işlem yönetimi)
+  - **eventlet** (Asenkron işlem yönetimi.)
 
 ## Kurulum
 

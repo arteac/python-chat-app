@@ -16,7 +16,7 @@ body {
     height: 80vh;
     margin: 50px auto;
 }
-/* Modal Stili */
+/* Modal Stili. */
 .modal {
     display: none;
     position: fixed;

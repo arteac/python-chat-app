@@ -39,7 +39,7 @@ if (storedUsername) {
     });
 }
 
-// Modal'ı dışarıya tıklanarak kapat
+// Modal'ı dışarıya tıklanarak kapat.
 window.onclick = function(event) {
     if (event.target == modal) {
         modal.style.display = "none";
