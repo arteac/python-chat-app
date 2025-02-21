@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anlık Mesajlaşma</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <!-- Opera, Safari gibi tarayıcılar için WebRTC uyumluluğu -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>Anlık Mesajlaşma</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- WebRTC için gereksinim duyulabilecek özellikler -->
+    <meta name="format-detection" content="telephone=no">
+    <meta name="robots" content="noindex, nofollow">
+    <!-- Opera ve Safari gibi tarayıcılar için WebRTC optimizasyonu -->
+    <meta name="apple-mobile-web-app-title" content="Anlık Mesajlaşma">
+    <meta name="msapplication-TileImage" content="path/to/icon.png">
+    <meta name="msapplication-TileColor" content="#000000">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>Anlık Mesajlaşma</h2>
+            <div class="user-info" id="user-info">Kullanıcı: <span id="username"></span></div>
+        </div>
+
+        <div id="imageModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <img id="modal-image" src="" alt="Image Preview">
+            </div>
+        </div>
+
+        <!-- Audio Call Section -->
+        <div id="audio-call-container" class="audio-call-container">
+            <div id="audio-call-status" class="audio-call-status">
+                <p id="audio-call-text">Sesli Arama için Tıkla</p>
+                <button onclick="startAudioCall()">Başlat</button>
+                <button onclick="endAudioCall()">Sonlandır</button>
+            </div>
+            <audio id="remote-audio" autoplay></audio>
+        </div>
+
+        <div class="chat-messages" id="chat-messages"></div>
+
+        <div class="chat-input">
+            <input type="text" id="message-input" placeholder="Mesajınızı yazın...">
+            <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+
+        <div class="file-input">
+            <div class="file-input-wrapper">
+                <input type="file" id="file-input" accept="image/*, .pdf, .docx, .txt">
+                <label for="file-input"><i class="fas fa-upload"></i> Dosya Seç</label>
+                <span id="file-name">Hiçbir dosya seçilmedi</span>
+            </div>
+            <button onclick="uploadFile()"><i class="fas fa-cloud-upload-alt"></i> Yükle</button>
+        </div>
+
+        <button class="logout-button" onclick="logout()">Çıkış Yap</button>
+    </div>
+<!-- Çıkış Yap Modalı -->
+<div id="cikisYapModal" class="cikisYapModal">
+    <div class="cikisYapModalIcerik">
+        <span class="cikisYapModalKapat">&times;</span>
+        <h2>Çıkış Yapmak İstediğinizden Emin Misiniz?</h2>
+        <div class="cikisYapModalIslemler">
+            <button id="cikisYapOnay">Evet, Çıkış Yap</button>
+            <button id="cikisYapIptal">Hayır, Kalmaya Devam Et</button>
+        </div>
+    </div>
+</div>
+<div id="username-modal" class="modal">
+    <div class="modal-content">
+        <h4>Kullanıcı Adınızı Girin</h4>
+        <input type="text" id="username-input" placeholder="Kullanıcı Adı" />
+        <button id="submit-username">Onayla</button>
+    </div>
+</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
