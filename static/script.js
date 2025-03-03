@@ -2,36 +2,9 @@ const socket = io();
 let username = '';
 let localStream = null;
 let peerConnection = null;
+const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// Enhanced WebRTC configuration with multiple STUN/TURN servers
-const configuration = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        {
-            urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
-            username: 'webrtc',
-            credential: 'webrtc'
-        }
-    ],
-    iceTransportPolicy: 'all',
-    bundlePolicy: 'max-bundle',
-    rtcpMuxPolicy: 'require'
-};
-
-// Browser-specific audio constraints
-const audioConstraints = {
-    audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-        sampleRate: 48000
-    }
-};
-
-// DOM Elements (unchanged)
+// DOM Elements
 const elements = {
     messageInput: document.getElementById('message-input'),
     chatMessages: document.getElementById('chat-messages'),
@@ -54,19 +27,19 @@ const elements = {
 
 let messageIdCounter = 0;
 
-// Input Sanitization (unchanged)
+// Input Sanitization
 const sanitizeInput = (input) => {
     const div = document.createElement('div');
     div.textContent = input;
     return div.innerHTML;
 };
 
-// Modal Management (unchanged)
+// Modal Management
 const toggleModal = (modal, display) => {
     modal.style.display = display ? 'block' : 'none';
 };
 
-// Initialize Username (unchanged)
+// Initialize Username
 const initUsername = () => {
     const storedUsername = localStorage.getItem('username');
     if (storedUsername) {
@@ -78,7 +51,7 @@ const initUsername = () => {
     }
 };
 
-// Handle Username Submission (unchanged)
+// Handle Username Submission
 elements.submitUsername.addEventListener('click', () => {
     const inputUsername = sanitizeInput(elements.usernameInput.value.trim());
     if (inputUsername) {
@@ -92,7 +65,7 @@ elements.submitUsername.addEventListener('click', () => {
     }
 });
 
-// Close Modal on Outside Click (unchanged)
+// Close Modal on Outside Click
 window.addEventListener('click', (event) => {
     if (event.target === elements.usernameModal) {
         toggleModal(elements.usernameModal, false);
@@ -103,7 +76,7 @@ window.addEventListener('click', (event) => {
     }
 });
 
-// Send Message (unchanged)
+// Send Message
 const sendMessage = () => {
     const message = sanitizeInput(elements.messageInput.value.trim());
     if (message && username) {
@@ -117,21 +90,9 @@ const sendMessage = () => {
     }
 };
 
-// Enhanced WebRTC Setup
+// WebRTC Setup
 const setupPeerConnection = (recipient) => {
     peerConnection = new RTCPeerConnection(configuration);
-
-    // Set codec preferences for better compatibility
-    const transceiver = peerConnection.getTransceivers()[0];
-    if (transceiver && transceiver.setCodecPreferences) {
-        const codecs = RTCRtpReceiver.getCapabilities('audio').codecs;
-        const preferredCodecs = codecs.filter(codec => 
-            codec.mimeType === 'audio/opus' || 
-            codec.mimeType === 'audio/PCMU' || 
-            codec.mimeType === 'audio/PCMA'
-        );
-        transceiver.setCodecPreferences(preferredCodecs);
-    }
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
@@ -141,73 +102,47 @@ const setupPeerConnection = (recipient) => {
 
     peerConnection.ontrack = (event) => {
         elements.remoteAudio.srcObject = event.streams[0];
-        elements.remoteAudio.play().catch(e => console.error('Audio play failed:', e));
         elements.audioCallText.textContent = 'Bağlantı Kuruldu!';
     };
 
-    peerConnection.oniceconnectionstatechange = () => {
-        if (peerConnection.iceConnectionState === 'disconnected' || 
-            peerConnection.iceConnectionState === 'failed') {
-            endAudioCall();
-        }
-    };
-
-    localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream);
-    });
+    localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
 };
 
-// Enhanced Start Audio Call
+// Start Audio Call
 const startAudioCall = async () => {
     const recipientUsername = prompt('Arama yapmak istediğiniz kullanıcıyı girin:');
     if (!recipientUsername) return;
 
     try {
-        // Detect iOS and adjust constraints
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        const constraints = isIOS ? { audio: true } : audioConstraints;
-
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setupPeerConnection(recipientUsername);
 
-        const offerOptions = {
-            offerToReceiveAudio: 1,
-            offerToReceiveVideo: 0,
-            voiceActivityDetection: true
-        };
-
-        const offer = await peerConnection.createOffer(offerOptions);
+        const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         socket.emit('initiate_call', { from: username, to: recipientUsername, offer });
         elements.audioCallText.textContent = 'Arama Başlatılıyor...';
     } catch (error) {
         console.error('Sesli arama başlatılamadı:', error);
-        alert('Sesli arama başlatılırken bir hata oluştu: ' + error.message);
+        alert('Sesli arama başlatılırken bir hata oluştu.');
         endAudioCall();
     }
 };
 
-// Enhanced End Audio Call
+// End Audio Call
 const endAudioCall = () => {
     if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
     }
     if (localStream) {
-        localStream.getTracks().forEach((track) => {
-            track.stop();
-            track.enabled = false;
-        });
+        localStream.getTracks().forEach((track) => track.stop());
         localStream = null;
     }
-    if (elements.remoteAudio) {
-        elements.remoteAudio.srcObject = null;
-        elements.remoteAudio.pause();
-    }
+    elements.remoteAudio.srcObject = null;
     elements.audioCallText.textContent = 'Sesli Arama için Tıkla';
 };
 
-// Enhanced Handle Incoming Call
+// Handle Incoming Call
 socket.on('initiate_call', async (data) => {
     if (data.to !== username) return;
 
@@ -215,10 +150,7 @@ socket.on('initiate_call', async (data) => {
     if (!confirmCall) return;
 
     try {
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        const constraints = isIOS ? { audio: true } : audioConstraints;
-
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setupPeerConnection(data.from);
 
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -228,12 +160,12 @@ socket.on('initiate_call', async (data) => {
         elements.audioCallText.textContent = 'Arama Kabul Edildi...';
     } catch (error) {
         console.error('Sesli arama cevaplanamadı:', error);
-        alert('Arama cevaplanırken bir hata oluştu: ' + error.message);
+        alert('Arama cevaplanırken bir hata oluştu.');
         endAudioCall();
     }
 });
 
-// Handle Call Answer (unchanged)
+// Handle Call Answer
 socket.on('answer_call', async (data) => {
     if (data.to === username) {
         try {
@@ -244,7 +176,7 @@ socket.on('answer_call', async (data) => {
     }
 });
 
-// Enhanced ICE Candidate Handling
+// Handle ICE Candidates
 socket.on('ice_candidate', async (data) => {
     if (data.to === username && peerConnection) {
         try {
@@ -255,7 +187,7 @@ socket.on('ice_candidate', async (data) => {
     }
 });
 
-// File Upload (unchanged)
+// File Upload
 const uploadFile = async () => {
     const file = elements.fileInput.files[0];
     if (!file) {
@@ -297,7 +229,7 @@ const uploadFile = async () => {
     }
 };
 
-// Remaining functions (unchanged)
+// Receive Message
 socket.on('message', (msg) => {
     if (!msg.username || !msg.message) return;
 
@@ -316,6 +248,7 @@ socket.on('message', (msg) => {
     elements.chatMessages.scrollTo({ top: elements.chatMessages.scrollHeight, behavior: 'smooth' });
 });
 
+// Receive File
 socket.on('send_file', (data) => {
     if (!data.username || !data.file_url) return;
 
@@ -341,6 +274,7 @@ socket.on('send_file', (data) => {
     elements.chatMessages.scrollTo({ top: elements.chatMessages.scrollHeight, behavior: 'smooth' });
 });
 
+// Delete Message/File
 const deleteMessage = (messageId) => socket.emit('delete_message', { messageId });
 const deleteFile = (filename) => socket.emit('delete_file', { filename });
 
@@ -354,6 +288,7 @@ socket.on('delete_file', (data) => {
     if (fileElement) fileElement.remove();
 });
 
+// Logout Modal
 const logout = () => toggleModal(elements.cikisYapModal, true);
 
 elements.cikisYapModalKapat.addEventListener('click', () => toggleModal(elements.cikisYapModal, false));
@@ -363,6 +298,7 @@ elements.cikisYapOnay.addEventListener('click', () => {
     window.location.href = '/';
 });
 
+// Image Modal
 const openModal = (imageUrl) => {
     toggleModal(elements.imageModal, true);
     elements.modalImage.src = imageUrl;
@@ -370,4 +306,5 @@ const openModal = (imageUrl) => {
 
 const closeModal = () => toggleModal(elements.imageModal, false);
 
+// Initialize
 initUsername();
