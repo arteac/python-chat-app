@@ -209,18 +209,19 @@ video {
 }
 
 .file-input-wrapper label {
-    background-color: #007bff;
-    color: #fff;
+    background-color: #25D366;
+    color: white;
     padding: 12px 20px;
     border-radius: 5px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: background-color 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Hafif gölge */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; /* WhatsApp'ın kullandığı modern font ailesi */
 }
 
 .file-input-wrapper label:hover {
-    background-color: #0056b3;
+    background-color: #20BA56;
 }
-
 .file-input-wrapper span {
     font-size: 14px;
     color: #555;
@@ -378,7 +379,7 @@ body {
 }
 .audio-call-container {
     width: 50%;
-    max-width: 400px;
+    max-width: 200px;
     margin: 20px auto;
     padding: 20px;
     background-color: #f7f7f7;
@@ -406,7 +407,7 @@ body {
 
 .call-buttons button {
     padding: 12px 20px;
-    font-size: 1rem;
+    font-size: 5px;
     border: none;
     border-radius: 30px;
     cursor: pointer;
@@ -528,13 +529,6 @@ audio {
 #submit-username:hover {
     background-color: #45a049;
 }
-
-
-
-
-
-
-
 .logout-button {
     margin-top: 15px;
     padding: 10px;
