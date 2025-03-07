@@ -101,11 +101,25 @@ const setupPeerConnection = (recipient) => {
     };
 
     peerConnection.ontrack = (event) => {
+        console.log('Remote track received:', event.streams[0]);
         elements.remoteAudio.srcObject = event.streams[0];
+        elements.remoteAudio.play().catch((err) => console.error('Audio play failed:', err));
         elements.audioCallText.textContent = 'Bağlantı Kuruldu!';
     };
 
-    localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log('ICE Connection State:', peerConnection.iceConnectionState);
+        if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed') {
+            endAudioCall();
+        }
+    };
+
+    if (localStream) {
+        localStream.getTracks().forEach((track) => {
+            peerConnection.addTrack(track, localStream);
+            console.log('Added local track:', track);
+        });
+    }
 };
 
 // Start Audio Call
@@ -115,6 +129,7 @@ const startAudioCall = async () => {
 
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('Local stream obtained:', localStream);
         setupPeerConnection(recipientUsername);
 
         const offer = await peerConnection.createOffer();
@@ -147,10 +162,14 @@ socket.on('initiate_call', async (data) => {
     if (data.to !== username) return;
 
     const confirmCall = confirm(`${data.from} sizi arıyor. Aramayı kabul etmek ister misiniz?`);
-    if (!confirmCall) return;
+    if (!confirmCall) {
+        socket.emit('call_rejected', { to: data.from, from: username });
+        return;
+    }
 
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('Local stream for answering:', localStream);
         setupPeerConnection(data.from);
 
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -170,6 +189,7 @@ socket.on('answer_call', async (data) => {
     if (data.to === username) {
         try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log('Remote description set with answer');
         } catch (error) {
             console.error('Cevap işlenirken hata:', error);
         }
@@ -181,6 +201,7 @@ socket.on('ice_candidate', async (data) => {
     if (data.to === username && peerConnection) {
         try {
             await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            console.log('ICE candidate added');
         } catch (error) {
             console.error('ICE candidate eklenirken hata:', error);
         }
@@ -308,3 +329,12 @@ const closeModal = () => toggleModal(elements.imageModal, false);
 
 // Initialize
 initUsername();
+
+// Bind audio call trigger (assuming there's a button or element to start the call)
+elements.audioCallText.addEventListener('click', () => {
+    if (elements.audioCallText.textContent === 'Sesli Arama için Tıkla') {
+        startAudioCall();
+    } else {
+        endAudioCall();
+    }
+});
