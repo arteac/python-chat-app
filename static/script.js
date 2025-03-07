@@ -1,340 +1,290 @@
 const socket = io();
 let username = '';
-let localStream = null;
-let peerConnection = null;
-const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-// DOM Elements
-const elements = {
-    messageInput: document.getElementById('message-input'),
-    chatMessages: document.getElementById('chat-messages'),
-    userInfo: document.getElementById('user-info'),
-    usernameDisplay: document.getElementById('username'),
-    fileInput: document.getElementById('file-input'),
-    fileNameDisplay: document.getElementById('file-name'),
-    remoteAudio: document.getElementById('remote-audio'),
-    usernameModal: document.getElementById('username-modal'),
-    usernameInput: document.getElementById('username-input'),
-    submitUsername: document.getElementById('submit-username'),
-    cikisYapModal: document.getElementById('cikisYapModal'),
-    cikisYapOnay: document.getElementById('cikisYapOnay'),
-    cikisYapIptal: document.getElementById('cikisYapIptal'),
-    cikisYapModalKapat: document.querySelector('.cikisYapModalKapat'),
-    imageModal: document.getElementById('imageModal'),
-    modalImage: document.getElementById('modal-image'),
-    audioCallText: document.getElementById('audio-call-text'),
-};
-
+const messageInput = document.getElementById('message-input');
+const chatMessages = document.getElementById('chat-messages');
+const userInfo = document.getElementById('user-info');
+const usernameDisplay = document.getElementById('username');
+const fileInput = document.getElementById('file-input');
+const fileNameDisplay = document.getElementById('file-name');
+const remoteAudio = document.getElementById('remote-audio');
 let messageIdCounter = 0;
+let localStream;
+let peerConnection;
+const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
 
-// Input Sanitization
-const sanitizeInput = (input) => {
-    const div = document.createElement('div');
-    div.textContent = input;
-    return div.innerHTML;
-};
+// Modal ve input elemanlarını tanımla
+const modal = document.getElementById('username-modal');
+const usernameInput = document.getElementById('username-input');
+const submitUsernameButton = document.getElementById('submit-username');
 
-// Modal Management
-const toggleModal = (modal, display) => {
-    modal.style.display = display ? 'block' : 'none';
-};
+// Kullanıcı adı kontrolü
+const storedUsername = localStorage.getItem('username');
+if (storedUsername) {
+    username = storedUsername;
+    socket.emit('set_username', username);
+    usernameDisplay.textContent = username;
+} else {
+    modal.style.display = "block";
 
-// Initialize Username
-const initUsername = () => {
-    const storedUsername = localStorage.getItem('username');
-    if (storedUsername) {
-        username = sanitizeInput(storedUsername);
-        socket.emit('set_username', username);
-        elements.usernameDisplay.textContent = username;
-    } else {
-        toggleModal(elements.usernameModal, true);
+    submitUsernameButton.addEventListener('click', () => {
+        username = usernameInput.value.trim();
+        if (username) {
+            localStorage.setItem('username', username);
+            socket.emit('set_username', username);
+            usernameDisplay.textContent = username;
+            modal.style.display = "none";
+        } else {
+            alert("Lütfen geçerli bir kullanıcı adı girin.");
+        }
+    });
+}
+
+// Modal'ı dışarıya tıklanarak kapat
+window.onclick = function(event) {
+    if (event.target == modal) {
+        modal.style.display = "none";
     }
 };
 
-// Handle Username Submission
-elements.submitUsername.addEventListener('click', () => {
-    const inputUsername = sanitizeInput(elements.usernameInput.value.trim());
-    if (inputUsername) {
-        username = inputUsername;
-        localStorage.setItem('username', username);
-        socket.emit('set_username', username);
-        elements.usernameDisplay.textContent = username;
-        toggleModal(elements.usernameModal, false);
-    } else {
-        alert('Lütfen geçerli bir kullanıcı adı girin.');
-    }
-});
-
-// Close Modal on Outside Click
-window.addEventListener('click', (event) => {
-    if (event.target === elements.usernameModal) {
-        toggleModal(elements.usernameModal, false);
-    } else if (event.target === elements.cikisYapModal) {
-        toggleModal(elements.cikisYapModal, false);
-    } else if (event.target === elements.imageModal) {
-        toggleModal(elements.imageModal, false);
-    }
-});
-
-// Send Message
-const sendMessage = () => {
-    const message = sanitizeInput(elements.messageInput.value.trim());
+function sendMessage() {
+    const message = messageInput.value.trim();
     if (message && username) {
         const timestamp = new Date().toLocaleTimeString();
         messageIdCounter++;
         const messageId = `msg-${messageIdCounter}`;
         socket.emit('message', { username, message, timestamp, messageId });
-        elements.messageInput.value = '';
+        messageInput.value = '';
     } else {
         alert('Mesaj ya da kullanıcı adı eksik.');
     }
-};
+}
 
-// WebRTC Setup
-const setupPeerConnection = (recipient) => {
-    peerConnection = new RTCPeerConnection(configuration);
-
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            socket.emit('ice_candidate', { to: recipient, candidate: event.candidate });
-        }
-    };
-
-    peerConnection.ontrack = (event) => {
-        console.log('Remote track received:', event.streams[0]);
-        elements.remoteAudio.srcObject = event.streams[0];
-        elements.remoteAudio.play().catch((err) => console.error('Audio play failed:', err));
-        elements.audioCallText.textContent = 'Bağlantı Kuruldu!';
-    };
-
-    peerConnection.oniceconnectionstatechange = () => {
-        console.log('ICE Connection State:', peerConnection.iceConnectionState);
-        if (peerConnection.iceConnectionState === 'disconnected' || peerConnection.iceConnectionState === 'failed') {
-            endAudioCall();
-        }
-    };
-
-    if (localStream) {
-        localStream.getTracks().forEach((track) => {
-            peerConnection.addTrack(track, localStream);
-            console.log('Added local track:', track);
-        });
+async function startAudioCall() {
+    const recipientUsername = prompt("Arama yapmak istediğiniz kullanıcıyı girin:");
+    if (recipientUsername) {
+        socket.emit('initiate_call', { from: username, to: recipientUsername });
     }
-};
+}
 
-// Start Audio Call
-const startAudioCall = async () => {
-    const recipientUsername = prompt('Arama yapmak istediğiniz kullanıcıyı girin:');
-    if (!recipientUsername) return;
-
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('Local stream obtained:', localStream);
-        setupPeerConnection(recipientUsername);
-
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit('initiate_call', { from: username, to: recipientUsername, offer });
-        elements.audioCallText.textContent = 'Arama Başlatılıyor...';
-    } catch (error) {
-        console.error('Sesli arama başlatılamadı:', error);
-        alert('Sesli arama başlatılırken bir hata oluştu.');
-        endAudioCall();
-    }
-};
-
-// End Audio Call
-const endAudioCall = () => {
+function endAudioCall() {
     if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
     }
     if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+        localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
-    elements.remoteAudio.srcObject = null;
-    elements.audioCallText.textContent = 'Sesli Arama için Tıkla';
-};
+    remoteAudio.srcObject = null;
+    document.getElementById('audio-call-text').textContent = "Sesli Arama Sonlandırıldı.";
+}
 
-// Handle Incoming Call
 socket.on('initiate_call', async (data) => {
-    if (data.to !== username) return;
+    if (data.to === username) {
+        const confirmCall = confirm(`${data.from} sizi arıyor. Aramayı kabul etmek ister misiniz?`);
+        if (confirmCall) {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                peerConnection = new RTCPeerConnection(configuration);
+                peerConnection.addStream(localStream);
 
-    const confirmCall = confirm(`${data.from} sizi arıyor. Aramayı kabul etmek ister misiniz?`);
-    if (!confirmCall) {
-        socket.emit('call_rejected', { to: data.from, from: username });
-        return;
-    }
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('ice_candidate', { to: data.from, candidate: event.candidate });
+                    }
+                };
 
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('Local stream for answering:', localStream);
-        setupPeerConnection(data.from);
+                peerConnection.onaddstream = (event) => {
+                    remoteAudio.srcObject = event.stream;
+                };
 
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        socket.emit('answer_call', { from: username, to: data.from, answer });
-        elements.audioCallText.textContent = 'Arama Kabul Edildi...';
-    } catch (error) {
-        console.error('Sesli arama cevaplanamadı:', error);
-        alert('Arama cevaplanırken bir hata oluştu.');
-        endAudioCall();
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('start_audio_call', { from: username, to: data.from, offer });
+            } catch (error) {
+                console.error('Sesli arama başlatılamadı:', error);
+            }
+        }
     }
 });
 
-// Handle Call Answer
-socket.on('answer_call', async (data) => {
+socket.on('start_audio_call', async (data) => {
     if (data.to === username) {
         try {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-            console.log('Remote description set with answer');
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            peerConnection = new RTCPeerConnection(configuration);
+            peerConnection.addStream(localStream);
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice_candidate', { to: data.from, candidate: event.candidate });
+                }
+            };
+
+            peerConnection.onaddstream = (event) => {
+                remoteAudio.srcObject = event.stream;
+            };
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer_call', { from: username, to: data.from, answer });
         } catch (error) {
-            console.error('Cevap işlenirken hata:', error);
+            console.error('Sesli arama cevaplanamadı:', error);
         }
     }
 });
 
-// Handle ICE Candidates
+socket.on('answer_call', async (data) => {
+    if (data.to === username) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    }
+});
+
 socket.on('ice_candidate', async (data) => {
-    if (data.to === username && peerConnection) {
+    if (data.to === username) {
         try {
             await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-            console.log('ICE candidate added');
         } catch (error) {
-            console.error('ICE candidate eklenirken hata:', error);
+            console.error('ICE candidate eklenirken hata oluştu:', error);
         }
     }
 });
 
-// File Upload
-const uploadFile = async () => {
-    const file = elements.fileInput.files[0];
-    if (!file) {
-        alert('Lütfen bir dosya seçin.');
-        return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-        alert('Dosya boyutu 5MB\'den büyük olamaz.');
-        return;
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'text/plain'];
-    if (!allowedTypes.includes(file.type)) {
-        alert('Sadece JPEG, PNG, GIF, PDF, DOCX ve TXT dosyaları yüklenebilir.');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-    elements.fileNameDisplay.textContent = 'Dosya yükleniyor...';
-
-    try {
-        const response = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await response.json();
-
-        if (data.error) {
-            throw new Error(data.error);
+function uploadFile() {
+    const file = fileInput.files[0];
+    if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Dosya boyutu 5MB\'den büyük olamaz.');
+            return;
         }
 
-        const timestamp = new Date().toLocaleTimeString();
-        socket.emit('send_file', { file_url: data.file_url, username, timestamp, filename: data.filename });
-        elements.fileNameDisplay.textContent = 'Hiçbir dosya seçilmedi';
-        elements.fileInput.value = '';
-    } catch (error) {
-        console.error('Dosya yükleme hatası:', error);
-        alert(`Dosya yüklenirken bir hata oluştu: ${error.message}`);
-        elements.fileNameDisplay.textContent = 'Hata oluştu!';
-    }
-};
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'text/plain'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Sadece JPEG, PNG, GIF, PDF, DOCX ve TXT dosyaları yüklenebilir.');
+            return;
+        }
 
-// Receive Message
-socket.on('message', (msg) => {
-    if (!msg.username || !msg.message) return;
+        const formData = new FormData();
+        formData.append('file', file);
 
-    const messageElement = document.createElement('div');
-    messageElement.classList.add('message');
-    messageElement.id = msg.messageId;
-
-    const content = `
-        <strong>${sanitizeInput(msg.username)}</strong> (${msg.timestamp}): ${sanitizeInput(msg.message)}
-        ${msg.username === username ? `<button onclick="deleteMessage('${msg.messageId}')">Sil</button>` : ''}
-    `;
-    messageElement.innerHTML = content;
-    if (msg.username === username) messageElement.classList.add('user');
-
-    elements.chatMessages.appendChild(messageElement);
-    elements.chatMessages.scrollTo({ top: elements.chatMessages.scrollHeight, behavior: 'smooth' });
-});
-
-// Receive File
-socket.on('send_file', (data) => {
-    if (!data.username || !data.file_url) return;
-
-    const fileElement = document.createElement('div');
-    fileElement.classList.add('message');
-    fileElement.id = data.filename;
-
-    let fileContent = `<strong>${sanitizeInput(data.username)}</strong> (${data.timestamp}): `;
-    if (data.username === username) {
-        fileContent += `<button onclick="deleteFile('${data.filename}')">Sil</button>`;
-        fileElement.classList.add('user');
-    }
-
-    if (data.file_url.match(/\.(jpeg|jpg|gif|png)$/)) {
-        fileContent += `<img src="${data.file_url}" alt="Preview" style="max-width: 100%; height: auto;" onclick="openModal('${data.file_url}')"/>`;
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(`Error: ${data.error}`);
+            } else if (data.file_url) {
+                const timestamp = new Date().toLocaleTimeString();
+                socket.emit('send_file', { file_url: data.file_url, username, timestamp, filename: data.filename });
+                fileNameDisplay.textContent = "Hiçbir dosya seçilmedi";
+                fileInput.value = '';
+            }
+        })
+        .catch(error => {
+            console.error('Dosya yükleme hatası:', error);
+            alert('Dosya yüklenirken bir hata oluştu.');
+        });
     } else {
-        const fileType = data.file_url.split('.').pop().toUpperCase();
-        fileContent += `<a href="${data.file_url}" target="_blank" class="file-link"><i class="fas fa-file"></i> ${fileType} Dosyası</a>`;
+        alert('Lütfen bir dosya seçin.');
     }
+}
 
-    fileElement.innerHTML = fileContent;
-    elements.chatMessages.appendChild(fileElement);
-    elements.chatMessages.scrollTo({ top: elements.chatMessages.scrollHeight, behavior: 'smooth' });
+socket.on('message', (msg) => {
+    if (msg.username && msg.message) {
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+        if (msg.username === username) {
+            messageElement.classList.add('user');
+            messageElement.innerHTML = `<strong>${msg.username}</strong> (${msg.timestamp}): ${msg.message} <button onclick="deleteMessage('${msg.messageId}')">Sil</button>`;
+        } else {
+            messageElement.innerHTML = `<strong>${msg.username}</strong> (${msg.timestamp}): ${msg.message}`;
+        }
+        messageElement.id = msg.messageId;
+        chatMessages.appendChild(messageElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 });
 
-// Delete Message/File
-const deleteMessage = (messageId) => socket.emit('delete_message', { messageId });
-const deleteFile = (filename) => socket.emit('delete_file', { filename });
+socket.on('send_file', (data) => {
+    if (data.username && data.file_url) {
+        const fileElement = document.createElement('div');
+        fileElement.classList.add('message');
+        if (data.username === username) {
+            fileElement.classList.add('user');
+            fileElement.innerHTML = 
+                `<strong>${data.username}</strong> (${data.timestamp}): 
+                <button onclick="deleteFile('${data.filename}')">Sil</button>`;
+        }
+
+        if (data.file_url.match(/\.(jpeg|jpg|gif|png)$/)) {
+            fileElement.innerHTML += `<img src="${data.file_url}" alt="Preview" style="max-width: 100%; height: auto;" onclick="openModal('${data.file_url}')"/>`;
+        } else {
+            const fileType = data.file_url.split('.').pop().toUpperCase();
+            fileElement.innerHTML += `<a href="${data.file_url}" target="_blank" class="file-link"><i class="fas fa-file"></i> ${fileType} Dosyası</a>`;
+        }
+
+        fileElement.id = data.filename;
+        chatMessages.appendChild(fileElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+});
+
+function deleteMessage(messageId) {
+    socket.emit('delete_message', { messageId });
+}
+
+function deleteFile(filename) {
+    socket.emit('delete_file', { filename });
+}
 
 socket.on('delete_message', (data) => {
     const messageElement = document.getElementById(data.messageId);
-    if (messageElement) messageElement.remove();
+    if (messageElement) {
+        messageElement.remove();
+    }
 });
 
 socket.on('delete_file', (data) => {
     const fileElement = document.getElementById(data.filename);
-    if (fileElement) fileElement.remove();
+    if (fileElement) {
+        fileElement.remove();
+    }
 });
 
-// Logout Modal
-const logout = () => toggleModal(elements.cikisYapModal, true);
+// Modal açma ve kapama işlemleri
+const cikisYapModal = document.getElementById('cikisYapModal');
+const cikisYapOnay = document.getElementById('cikisYapOnay');
+const cikisYapIptal = document.getElementById('cikisYapIptal');
+const cikisYapModalKapat = document.querySelector('.cikisYapModalKapat');
 
-elements.cikisYapModalKapat.addEventListener('click', () => toggleModal(elements.cikisYapModal, false));
-elements.cikisYapIptal.addEventListener('click', () => toggleModal(elements.cikisYapModal, false));
-elements.cikisYapOnay.addEventListener('click', () => {
+function logout() {
+    cikisYapModal.style.display = "block";
+}
+
+cikisYapModalKapat.addEventListener('click', () => {
+    cikisYapModal.style.display = "none";
+});
+
+cikisYapIptal.addEventListener('click', () => {
+    cikisYapModal.style.display = "none";
+});
+
+cikisYapOnay.addEventListener('click', () => {
     localStorage.removeItem('username');
     window.location.href = '/';
 });
 
-// Image Modal
-const openModal = (imageUrl) => {
-    toggleModal(elements.imageModal, true);
-    elements.modalImage.src = imageUrl;
-};
+function openModal(imageUrl) {
+    const modal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modal-image');
+    modal.style.display = "block";
+    modalImage.src = imageUrl;
+}
 
-const closeModal = () => toggleModal(elements.imageModal, false);
-
-// Initialize
-initUsername();
-
-// Bind audio call trigger (assuming there's a button or element to start the call)
-elements.audioCallText.addEventListener('click', () => {
-    if (elements.audioCallText.textContent === 'Sesli Arama için Tıkla') {
-        startAudioCall();
-    } else {
-        endAudioCall();
-    }
-});
+function closeModal() {
+    const modal = document.getElementById('imageModal');
+    modal.style.display = "none";
+}
